@@ -1,0 +1,517 @@
+/*
+ * 色系(theme)設計:
+ * - --danger/--ok/--warn 呢3個係「狀態色」(合格/警告/刪除等),刻意喺3個色系
+ *   入面都保持一致,唔跟住主題色變,確保使用者認得呢個狀態提示嘅意思唔會亂。
+ * - --bg/--card-bg/--text/--muted/--border/--primary/--primary-text/--input-bg
+ *   先會跟住色系(data-theme)同淺/深色(data-mode)變化。
+ * - data-theme/data-mode 兩個attribute由 js/theme.js 喺頁面load嗰陣,根據
+ *   localStorage(用戶揀嘅色系/模式)即刻set落<html>度,預設模式「跟裝置」
+ *   會再配合下面嘅resolve邏輯(喺theme.js處理,呢度淨係負責畫公仔)。
+ */
+:root {
+  --danger: #c0392b;
+  --ok: #1a7f37;
+  --warn: #b45309;
+}
+
+:root[data-mode="dark"] {
+  --danger: #ff6b5e;
+  --ok: #4ade80;
+  --warn: #f5a524;
+}
+
+/* 柔和藍 Soft Blue(預設色系) */
+:root,
+[data-theme="soft-blue"] {
+  --bg: #eef3fa;
+  --card-bg: #ffffff;
+  --text: #223344;
+  --muted: #5f7086;
+  --border: #d7e3f0;
+  --primary: #4f7fc4;
+  --primary-text: #ffffff;
+  --input-bg: #ffffff;
+}
+
+[data-theme="soft-blue"][data-mode="dark"] {
+  --bg: #141b23;
+  --card-bg: #1c2530;
+  --text: #e4ebf2;
+  --muted: #92a2b3;
+  --border: #2b3744;
+  --primary: #74a0dc;
+  --primary-text: #0c141c;
+  --input-bg: #121922;
+}
+
+/* 鼠尾草綠 Sage Green */
+[data-theme="sage-green"] {
+  --bg: #f1f5ee;
+  --card-bg: #ffffff;
+  --text: #2b3326;
+  --muted: #677461;
+  --border: #dbe6d4;
+  --primary: #6f9362;
+  --primary-text: #ffffff;
+  --input-bg: #ffffff;
+}
+
+[data-theme="sage-green"][data-mode="dark"] {
+  --bg: #151a13;
+  --card-bg: #1e251b;
+  --text: #e6ebe1;
+  --muted: #9eab95;
+  --border: #313b2c;
+  --primary: #93ba85;
+  --primary-text: #0f140d;
+  --input-bg: #131811;
+}
+
+/* 暖沙杏桃 Warm Sand */
+[data-theme="warm-sand"] {
+  --bg: #faf3ec;
+  --card-bg: #ffffff;
+  --text: #3a2f28;
+  --muted: #83705f;
+  --border: #ecdfd0;
+  --primary: #c17f50;
+  --primary-text: #ffffff;
+  --input-bg: #ffffff;
+}
+
+[data-theme="warm-sand"][data-mode="dark"] {
+  --bg: #1e1912;
+  --card-bg: #292119;
+  --text: #f0e6db;
+  --muted: #bba088;
+  --border: #3b2e22;
+  --primary: #dc9f6e;
+  --primary-text: #1a1108;
+  --input-bg: #1a150f;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang HK", "Noto Sans HK", "Microsoft JhengHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--primary);
+  color: var(--primary-text);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-header h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.profile-switcher {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-switcher select {
+  max-width: 40vw;
+}
+
+.btn-icon {
+  background: rgba(255,255,255,0.18);
+  border: none;
+  color: var(--primary-text);
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.tabs {
+  display: flex;
+  overflow-x: auto;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 52px;
+  z-index: 9;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tab-btn {
+  flex: 0 0 auto;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  padding-bottom: 48px;
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+h2 { font-size: 19px; margin: 4px 0 14px; }
+h3 { font-size: 15px; margin: 0 0 10px; }
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.form-grid input[type="text"],
+.form-grid input[type="date"],
+.form-grid input[type="number"],
+.form-grid select {
+  font-size: 15px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  width: 100%;
+}
+
+.checkbox-label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.checkbox-label input { width: auto; }
+
+.checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ---- 外觀/色系揀選(參數設定分頁) ---- */
+.theme-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.theme-swatch {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text) !important;
+}
+
+.theme-swatch:has(input:checked) {
+  border-color: var(--primary);
+  border-width: 2px;
+  padding: 7px 11px;
+}
+
+.theme-swatch input { width: auto; margin: 0; }
+
+.swatch-dot {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.mode-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mode-picker label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.mode-picker label:has(input:checked) {
+  border-color: var(--primary);
+  border-width: 2px;
+  padding: 5px 11px;
+  font-weight: 600;
+}
+
+.mode-picker input { width: auto; margin: 0; }
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-primary, .btn-secondary {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.form-warning {
+  color: var(--warn);
+  font-size: 13px;
+}
+
+.overlap-row td {
+  background: rgba(180, 83, 9, 0.12);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.disclaimer {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.table-scroll { overflow-x: auto; }
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th, .data-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-table td.wrap { white-space: normal; }
+
+.data-table td.actions-cell {
+  white-space: nowrap;
+}
+
+.data-table td.actions-cell .btn-secondary,
+.data-table td.actions-cell .btn-danger {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+/* 窄螢幕(手機)將表格轉做逐筆紀錄嘅「卡片」排版,唔使再靠橫向scroll先睇晒
+   全部欄位/撳到掣。做法:表頭隱藏,tr變做一張卡,每個td變做「標籤: 數值」
+   一行,標籤文字用 data-label attribute 帶出嚟。 */
+@media (max-width: 640px) {
+  .table-scroll { overflow-x: visible; }
+
+  .data-table thead { display: none; }
+
+  .data-table, .data-table tbody, .data-table tr, .data-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .data-table tr {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px 12px;
+    margin-bottom: 10px;
+  }
+
+  .data-table tr:last-child { margin-bottom: 0; }
+
+  .data-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--border);
+    white-space: normal;
+    text-align: right;
+  }
+
+  .data-table td:last-of-type { border-bottom: none; }
+
+  .data-table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 12px;
+    text-align: left;
+    flex-shrink: 0;
+  }
+
+  /* 冇填嘅選填欄位(航班/備註)唔顯示空白行 */
+  .data-table td[data-label]:empty { display: none; }
+
+  .data-table td.hint {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .data-table td.actions-cell {
+    justify-content: flex-start;
+    gap: 8px;
+    padding-top: 10px;
+  }
+
+  .data-table td.actions-cell .btn-secondary,
+  .data-table td.actions-cell .btn-danger {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+.status-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 13px;
+  gap: 10px;
+}
+
+.status-line:last-child { border-bottom: none; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-ok { background: rgba(26,127,55,0.15); color: var(--ok); }
+.badge-danger { background: rgba(192,57,43,0.15); color: var(--danger); }
+.badge-warn { background: rgba(180,83,9,0.15); color: var(--warn); }
+
+.notice {
+  background: var(--card-bg);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.app-footer {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ---- Modal ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 16px;
+}
+
+.modal-box {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 18px;
+  width: 100%;
+  max-width: 380px;
+}
+
+.modal-box h3 { margin-top: 0; }
+
+@media (max-width: 420px) {
+  .app-header h1 { font-size: 16px; }
+  .profile-switcher select { max-width: 34vw; }
+}

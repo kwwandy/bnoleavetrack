@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BNO 定居/入籍申請助手</title>
+<meta name="theme-color" content="#4f7fc4">
+<!-- theme.js 特登放呢度(stylesheet之前),一load就set好data-theme/data-mode,
+     避免入到app閃一閃「預設色」先跳去用戶揀開嗰個色系。 -->
+<script src="js/theme.js"></script>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <h1>BNO 定居/入籍申請助手</h1>
+  <div class="profile-switcher">
+    <select id="profileSelect" aria-label="揀檔案"></select>
+    <button id="btnNewProfile" class="btn-icon" title="新增檔案">＋</button>
+    <button id="btnManageProfile" class="btn-icon" title="管理檔案">⚙</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab-btn active" data-tab="overview">總覽</button>
+  <button class="tab-btn" data-tab="trips">離境日誌</button>
+  <button class="tab-btn" data-tab="profile">基本資料</button>
+  <button class="tab-btn" data-tab="taxtest">稅務/考試</button>
+  <button class="tab-btn" data-tab="report">輸出報告</button>
+  <button class="tab-btn" data-tab="settings">參數設定</button>
+  <button class="tab-btn" data-tab="backup">輸出備份</button>
+</nav>
+
+<main id="app">
+
+<div id="noProfileNotice" class="notice" hidden>
+  <p>你仲未有任何檔案,請先撳右上角「＋」新增一個。</p>
+</div>
+
+<div id="tabPanels" hidden>
+
+  <section id="tab-overview" class="tab-panel active">
+    <h2>總覽</h2>
+    <p class="hint">一眼睇晒有冇超出規定、幾時可以申請、幾時到期。詳細逐程出入境紀錄請去「離境日誌」分頁。</p>
+    <p class="hint">你嘅資料淨係存喺你而家用緊嗰個瀏覽器入面(IndexedDB本機儲存),唔會自動上載去任何伺服器或雲端。備份/清除資料請去「輸出備份」分頁。</p>
+
+    <div class="card">
+      <h3>ILR(永久居留)</h3>
+      <div id="ilrSummary" class="hint">請先喺「基本資料」分頁填寫簽證生效日</div>
+    </div>
+
+    <div class="card">
+      <h3>BC(入籍 / British Citizenship)</h3>
+      <div id="bcSummary" class="hint">請先喺「基本資料」分頁填寫簽證生效日</div>
+      <label>假設申請日(用嚟計缺勤合規,預設為最早可申請日)
+        <input type="date" id="bcApplicationDateInput">
+      </label>
+    </div>
+
+    <div class="card">
+      <h3>稅務 / 考試提示</h3>
+      <div id="ovFigSummary" class="hint"></div>
+      <div id="ovExamSummary" class="hint"></div>
+      <p class="disclaimer">詳細資料同參數請去「稅務/考試」分頁。</p>
+    </div>
+  </section>
+
+  <section id="tab-trips" class="tab-panel">
+    <h2>離境日誌</h2>
+
+    <form id="tripForm" class="card form-grid">
+      <input type="hidden" id="tripId">
+      <label>離境日期
+        <input type="date" id="tripDeparture" required>
+      </label>
+      <label>返回日期(必填;未成行請填預計日期)
+        <input type="date" id="tripReturn" required>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="tripEstimated"> 呢個係預計日期(未確認)
+      </label>
+      <label>離境航班編號(選填,建議用英文/數字,例如 CX250)
+        <input type="text" id="tripOutboundFlight" placeholder="例如:CX250">
+      </label>
+      <label>返英航班編號(選填,建議用英文/數字)
+        <input type="text" id="tripInboundFlight" placeholder="例如:CX251">
+      </label>
+      <label>備註(選填;會印落PDF報告,建議用英文輸入)
+        <input type="text" id="tripReason" placeholder="例如:family visit">
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary" id="tripSubmitBtn">新增紀錄</button>
+        <button type="button" class="btn-secondary" id="tripCancelEdit" hidden>取消編輯</button>
+      </div>
+      <p class="form-error" id="tripFormError" hidden></p>
+      <p class="form-warning" id="tripOverlapWarning" hidden></p>
+    </form>
+
+    <div class="card">
+      <h3>紀錄列表</h3>
+      <p class="form-warning" id="tripOverlapSummary" hidden></p>
+      <div class="table-scroll">
+        <table class="data-table" id="tripTable">
+          <thead>
+            <tr><th>離境日</th><th>返英日</th><th>缺勤日數</th><th>離境航班</th><th>返英航班</th><th>備註</th><th></th></tr>
+          </thead>
+          <tbody id="tripTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-profile" class="tab-panel">
+    <h2>基本資料</h2>
+
+    <div class="card">
+      <h3>個人基本資料</h3>
+      <form id="profileForm" class="form-grid">
+        <label>檔案名稱
+          <input type="text" id="pfName" required>
+        </label>
+        <label>護照號碼(選填)
+          <input type="text" id="pfPassportNo" placeholder="例如:123456789 或 H12345678">
+        </label>
+        <p class="form-warning" id="pfPassportWarning" hidden>⚠ 為咗方便 Home Office 核對 PDF 報告上嘅資料,建議填寫護照號碼</p>
+        <label>簽證生效日(entry clearance 批出日)
+          <input type="date" id="pfVisaGrantDate">
+        </label>
+        <label>首次抵英日期
+          <input type="date" id="pfFirstArrivalDate">
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="pfMarried"> 配偶/民事伴侶係英國公民(BC毋須等ILR後12個月)
+        </label>
+        <label>ILR 實際批出日(未有可留空)
+          <input type="date" id="pfIlrGrantDate">
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">儲存資料</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section id="tab-taxtest" class="tab-panel">
+    <h2>稅務同考試提示</h2>
+
+    <div class="card">
+      <h3>英國稅務居民 / FIG 4年豁免窗口</h3>
+      <form id="taxForm" class="form-grid">
+        <label>首個成為英國稅務居民嘅稅年(填開始年份,例如 2025 代表 2025/26 稅年)
+          <input type="number" id="taxYearInput" min="2000" max="2100" placeholder="例如 2025">
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">儲存</button>
+        </div>
+      </form>
+      <div id="figSummary" class="hint"></div>
+      <p class="disclaimer">並非稅務意見,實際是否合資格請向會計師確認。SRT(稅務居民測試)牽涉其他因素,唔淨係計喺英國日數。如果上面欄位留空,會根據「基本資料」嘅首次抵英日,用SRT「自動居民測試」183日門檻自動預填一個建議稅年(假設抵英後一直留喺英國冇再出境),你可以自行覆蓋;實際情況(例如中途返香港、split year treatment等)請自行核對。</p>
+    </div>
+
+    <div class="card">
+      <h3>英文試 / Life in the UK 到期提示</h3>
+      <form id="examForm" class="form-grid">
+        <label>英文試日期
+          <input type="date" id="englishTestDateInput">
+        </label>
+        <label>Life in the UK 考試日期
+          <input type="date" id="lifeUkTestDateInput">
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">儲存</button>
+        </div>
+      </form>
+      <div id="examSummary" class="hint"></div>
+      <p class="disclaimer">英文試(SELT)假設有效年期預設為兩年,根據Home Office指引,SELT證書喺遞交申請當日一般唔可以超過2年。Life in the UK測試而家官方指引冇註明到期日,預設為無限期。以上兩個年期都可以喺「參數設定」分頁自行調整,請以最新官方指引為準。</p>
+      <p class="disclaimer">根據Home Office指引,18歲以下及年滿65歲或以上人士,可獲豁免考試。60-64歲嘅申請人,特定情況下都可能獲酌情豁免,請向政府查詢。</p>
+    </div>
+  </section>
+
+  <section id="tab-report" class="tab-panel">
+    <h2>輸出報告</h2>
+    <div class="card">
+      <p>兩種報告分開生成,各自淨係顯示同嗰個申請相關嘅缺勤規則,唔會將 ILR 同入籍嘅唔同上限混喺同一份文件度,以免誤讀。內文一律用英文撰寫,適合用嚟遞交 Home Office 申請。</p>
+
+      <h3>ILR(永久居留)申請報告</h3>
+      <p class="hint">只顯示出入境紀錄同「任何連續12個月180日」滾動缺勤檢查。</p>
+      <button id="btnGenerateIlrReport" class="btn-primary">生成 ILR 報告</button>
+
+      <hr style="margin:16px 0;border:none;border-top:1px solid var(--border);">
+
+      <h3>BC(入籍)申請報告</h3>
+      <p class="hint">只顯示出入境紀錄同入籍專用嘅「過去N年」/「過去12個月」缺勤檢查,使用嘅「假設申請日」同「總覽」分頁一致(可以喺嗰邊改)。</p>
+      <button id="btnGenerateBcReport" class="btn-primary">生成 BC 報告</button>
+
+      <p id="reportStatus" class="hint"></p>
+    </div>
+  </section>
+
+  <section id="tab-settings" class="tab-panel">
+    <h2>可調整參數</h2>
+
+    <div class="card">
+      <h3>外觀</h3>
+      <p class="hint">色系</p>
+      <div class="theme-picker" id="themePicker">
+        <label class="theme-swatch">
+          <input type="radio" name="themeChoice" value="soft-blue">
+          <span class="swatch-dot" style="background:#4f7fc4"></span>
+          柔和藍
+        </label>
+        <label class="theme-swatch">
+          <input type="radio" name="themeChoice" value="sage-green">
+          <span class="swatch-dot" style="background:#6f9362"></span>
+          鼠尾草綠
+        </label>
+        <label class="theme-swatch">
+          <input type="radio" name="themeChoice" value="warm-sand">
+          <span class="swatch-dot" style="background:#c17f50"></span>
+          暖沙杏桃
+        </label>
+      </div>
+      <p class="hint" style="margin-top:10px;">淺色/深色</p>
+      <div class="mode-picker" id="modePicker">
+        <label><input type="radio" name="modeChoice" value="auto"> 跟裝置</label>
+        <label><input type="radio" name="modeChoice" value="light"> 淺色</label>
+        <label><input type="radio" name="modeChoice" value="dark"> 深色</label>
+      </div>
+      <p class="disclaimer">揀咗會即時生效,唔使撳「儲存」;呢個係成個app嘅外觀設定,唔跟個別檔案(profile)分開儲存。</p>
+    </div>
+
+    <div class="card">
+      <form id="settingsForm" class="form-grid">
+        <label>滾動缺勤上限(日)— ILR
+          <input type="number" id="setRollingLimit" min="0">
+        </label>
+        <label>ILR 合資格年期(年)
+          <input type="number" id="setIlrYears" min="1">
+        </label>
+        <label>ILR 可提前遞交日數
+          <input type="number" id="setIlrEarlyDays" min="0">
+        </label>
+        <label>入籍(非配偶,Section 6(1))合資格年期(年)
+          <input type="number" id="setNatYearsUnmarried" min="0">
+        </label>
+        <label>入籍(非配偶)過去N年缺勤上限(日)
+          <input type="number" id="setNatDaysUnmarried" min="0">
+        </label>
+        <label>入籍(配偶為英籍,Section 6(2))合資格年期(年)
+          <input type="number" id="setNatYearsMarried" min="0">
+        </label>
+        <label>入籍(配偶為英籍)過去N年缺勤上限(日)
+          <input type="number" id="setNatDaysMarried" min="0">
+        </label>
+        <label>入籍過去12個月缺勤上限(日,兩條路線共用)
+          <input type="number" id="setNatLast12" min="0">
+        </label>
+        <label>BC 需等ILR後幾多個月
+          <input type="number" id="setBcWaitMonths" min="0">
+        </label>
+        <label>英文試(SELT)假設有效年期(年)
+          <input type="number" id="setEnglishTestValidity" min="0">
+        </label>
+        <label>Life in the UK 假設有效年期(年;0或留空=無限期)
+          <input type="number" id="setLifeUkTestValidity" min="0">
+        </label>
+        <label>FIG 豁免年期
+          <input type="number" id="setFigYears" min="0">
+        </label>
+        <label>參數最後核對日期
+          <input type="date" id="setLastVerified">
+        </label>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">儲存參數</button>
+          <button type="button" class="btn-secondary" id="btnResetDefaults">還原預設值</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section id="tab-backup" class="tab-panel">
+    <h2>輸出備份</h2>
+    <div class="card">
+      <p class="hint">你嘅資料淨係存喺你而家用緊嗰個瀏覽器入面(IndexedDB本機儲存),唔會自動上載去任何伺服器或雲端。清除瀏覽器資料、換瀏覽器或者換裝置都會令資料消失,建議定期用下面「匯出」功能備份。</p>
+      <h3>匯出</h3>
+      <div class="form-actions">
+        <button id="btnExportProfile" class="btn-secondary">匯出目前檔案</button>
+        <button id="btnExportAll" class="btn-secondary">匯出全部檔案</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>匯入</h3>
+      <input type="file" id="importFileInput" accept="application/json">
+      <p class="hint">匯入會將檔案加入做新檔案,唔會覆蓋現有資料。</p>
+      <p id="importStatus" class="hint"></p>
+    </div>
+    <div class="card">
+      <h3>清除本機所有資料</h3>
+      <p class="hint">一鍵刪走呢個瀏覽器入面全部檔案、全部行程紀錄同全部參數設定,適合喺公用電腦或者交還借用電腦之前使用嚟保障私隱。呢個動作唔可以還原,建議刪除前先匯出備份。</p>
+      <button id="btnWipeAllData" class="btn-danger">清除本機所有資料</button>
+    </div>
+  </section>
+
+</div>
+</main>
+
+<div id="modalRoot"></div>
+
+<footer class="app-footer">
+  <p>本工具僅供個人參考,並非法律或稅務意見。所有日期同缺勤上限計算基於目前公開嘅移民及稅務指引,相關規則可能隨時修改。正式遞交 ILR、入籍或稅務申報前,請自行核對 gov.uk 最新指引,或諮詢註冊移民顧問/會計師。</p>
+</footer>
+
+<script src="js/dates.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/db.js"></script>
+<script src="js/lib/jspdf.umd.min.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
